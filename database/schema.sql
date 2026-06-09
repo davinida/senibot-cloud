@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS seniors (
     senior_id   SERIAL PRIMARY KEY,
     name        VARCHAR(50),
     device_id   VARCHAR(100),   -- 연결된 라즈베리파이 디바이스 식별자
-    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at  TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 -- 보호자 정보 (어르신과 1:N, 알림 수신 대상)
@@ -22,14 +22,14 @@ CREATE TABLE IF NOT EXISTS guardians (
     name         VARCHAR(50),
     phone        VARCHAR(20),    -- SNS 알림 발송용
     cognito_sub  VARCHAR(100),   -- Cognito 사용자 식별자
-    created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at   TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 -- 환경 센서 데이터 (라즈베리파이 + DHT11 → IoT Core → Lambda)
 CREATE TABLE IF NOT EXISTS sensor_data (
     id           SERIAL PRIMARY KEY,
     senior_id    INTEGER REFERENCES seniors(senior_id),
-    timestamp    TIMESTAMP NOT NULL,
+    timestamp    TIMESTAMPTZ NOT NULL,
     sensor_type  VARCHAR(20),
     temperature  REAL,
     humidity     REAL
@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS sensor_data (
 CREATE TABLE IF NOT EXISTS fitbit_data (
     id           SERIAL PRIMARY KEY,
     senior_id    INTEGER REFERENCES seniors(senior_id),
-    timestamp    TIMESTAMP NOT NULL,
+    timestamp    TIMESTAMPTZ NOT NULL,
     heart_rate   INTEGER,
     steps        INTEGER,
     sleep_score  INTEGER,        -- 미측정 시 NULL 허용
@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS fitbit_data (
 CREATE TABLE IF NOT EXISTS alerts (
     id            SERIAL PRIMARY KEY,
     senior_id     INTEGER REFERENCES seniors(senior_id),
-    timestamp     TIMESTAMP NOT NULL,
+    timestamp     TIMESTAMPTZ NOT NULL,
     alert_type    VARCHAR(30),   -- TEMP_HIGH, HR_HIGH 등
     level         VARCHAR(20),   -- INFO / WARNING / EMERGENCY
     message       TEXT,
