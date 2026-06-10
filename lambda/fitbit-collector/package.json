@@ -1,0 +1,12 @@
+{
+  "name": "senibot-fitbit-collector",
+  "version": "1.0.0",
+  "description": "SeniBot 생체 데이터 수집 Lambda (Google Health API -> RDS PostgreSQL)",
+  "main": "index.js",
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "pg": "^8.13.0"
+  }
+}
