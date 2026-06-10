@@ -1,9 +1,14 @@
 'use strict';
 
 const { Client } = require('pg');
+const { SNSClient } = require('@aws-sdk/client-sns');
+const alertEngine = require('./alert-engine');
 
 // device_id가 이벤트에 없을 때 사용할 기본 어르신 디바이스
 const DEFAULT_DEVICE_ID = 'senibot-pi-001';
+
+// SNS 클라이언트는 컨테이너 재사용을 위해 모듈 스코프에서 1회 생성 (리전은 AWS_REGION 자동)
+const snsClient = new SNSClient({});
 
 /**
  * env-processor
@@ -70,6 +75,14 @@ exports.handler = async (event) => {
       `저장 완료: sensor_data.id=${id}, senior_id=${seniorId}, device_id=${deviceId}, ` +
       `sensor_type=${sensorType}, temperature=${temperature}, humidity=${humidity}`
     );
+
+    // 임계값 알림 평가 (데이터 저장과 격리: 알림 실패가 저장 성공을 무효화하지 않음)
+    // 이미 만든 pg 커넥션과 seniorId 재사용.
+    try {
+      await alertEngine.evaluateEnvironmentAlerts(client, snsClient, seniorId, { temperature, humidity });
+    } catch (alertErr) {
+      console.error('알림 평가 중 오류(센서 저장은 정상):', alertErr.message);
+    }
 
     return { ok: true, id, senior_id: seniorId };
   } catch (err) {

@@ -1,9 +1,14 @@
 'use strict';
 
 const { Client } = require('pg');
+const { SNSClient } = require('@aws-sdk/client-sns');
+const alertEngine = require('./alert-engine');
 
 // 조회 대상 어르신 디바이스 (env-processor와 동일 패턴)
 const DEFAULT_DEVICE_ID = 'senibot-pi-001';
+
+// SNS 클라이언트는 컨테이너 재사용을 위해 모듈 스코프에서 1회 생성 (리전은 AWS_REGION 자동)
+const snsClient = new SNSClient({});
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const HEALTH_BASE = 'https://health.googleapis.com/v4/users/me/dataTypes';
@@ -267,8 +272,19 @@ async function saveToRds(deviceId, row) {
        RETURNING id`,
       [seniorId, row.timestamp, row.heartRate, row.steps, null, row.spo2] // sleep_score는 현재 null
     );
+    const id = inserted.rows[0].id;
 
-    return { id: inserted.rows[0].id, seniorId };
+    // 임계값 알림 평가 (중복 skip이 아닌 '신규 저장' 경로에서만 도달 / 저장과 격리)
+    // 같은 pg 커넥션과 seniorId, 모듈 스코프 snsClient 재사용. heart_rate/steps 기준 판정.
+    try {
+      await alertEngine.evaluateFitbitAlerts(client, snsClient, seniorId, {
+        heart_rate: row.heartRate, steps: row.steps,
+      });
+    } catch (alertErr) {
+      console.error('알림 평가 중 오류(생체 저장은 정상):', alertErr.message);
+    }
+
+    return { id, seniorId };
   } finally {
     try {
       await client.end();
