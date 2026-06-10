@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>시니봇 — 보호자 대시보드</title>
+  <meta name="viewport" content="width=1280, initial-scale=1" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    /* ─── 기본 스타일 ─────────────────────────── */
+    :root {
+      --color-normal: #4CAF50;
+      --color-warning: #FF9800;
+      --color-emergency: #F44336;
+      --color-primary: #2196F3;
+      --color-bg: #F5F7FA;
+      --color-text: #1F2937;
+      --color-muted: #6B7280;
+      --color-card: #FFFFFF;
+      --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.08);
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: var(--color-bg);
+      color: var(--color-text);
+      font-family: 'Pretendard', '맑은 고딕', -apple-system, BlinkMacSystemFont,
+                   'Segoe UI', Roboto, sans-serif;
+    }
+
+    /* ─── 헤더 상태 배너 ─────────────────────── */
+    .status-banner {
+      width: 100%;
+      padding: 32px 48px;
+      color: white;
+      transition: background-color 0.3s ease;
+      background: var(--color-muted);
+    }
+    .status-banner.normal    { background: var(--color-normal); }
+    .status-banner.warning   { background: var(--color-warning); }
+    .status-banner.emergency { background: var(--color-emergency); }
+    .status-banner h1 {
+      margin: 0;
+      font-size: 28px;
+      font-weight: 700;
+    }
+    .status-banner .status-sub {
+      margin-top: 6px;
+      font-size: 15px;
+      opacity: 0.9;
+    }
+
+    /* ─── 본문 컨테이너 ──────────────────────── */
+    .container {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 32px 48px 80px;
+    }
+    .section-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin: 32px 0 16px;
+      color: var(--color-text);
+    }
+
+    /* ─── 데이터 카드 그리드 ─────────────────── */
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 20px;
+      margin-top: 8px;
+    }
+    .data-card {
+      background: var(--color-card);
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: var(--shadow-card);
+      border: 2px solid transparent;
+      transition: border-color 0.3s ease;
+    }
+    .data-card.alert {
+      border-color: var(--color-warning);
+    }
+    .data-card .label {
+      font-size: 14px;
+      color: var(--color-muted);
+      margin-bottom: 12px;
+    }
+    .data-card .value {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--color-text);
+    }
+    .data-card .value .unit {
+      font-size: 18px;
+      font-weight: 500;
+      color: var(--color-muted);
+      margin-left: 4px;
+    }
+
+    /* ─── 차트 ───────────────────────────────── */
+    .chart-card {
+      background: var(--color-card);
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: var(--shadow-card);
+    }
+    .chart-container {
+      height: 300px;
+      position: relative;
+    }
+    #chartPlaceholder {
+      display: none;
+      text-align: center;
+      padding: 100px 0;
+      color: var(--color-muted);
+      font-size: 15px;
+    }
+
+    /* ─── 알림 목록 ──────────────────────────── */
+    .alert-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .alert-card {
+      background: var(--color-card);
+      border-radius: 12px;
+      padding: 16px 20px;
+      box-shadow: var(--shadow-card);
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      border-left: 4px solid var(--color-muted);
+    }
+    .alert-card.INFO      { border-left-color: var(--color-primary); }
+    .alert-card.WARNING   { border-left-color: var(--color-warning); }
+    .alert-card.EMERGENCY { border-left-color: var(--color-emergency); }
+    .alert-card .icon { font-size: 22px; }
+    .alert-card .body { flex: 1; }
+    .alert-card .message { font-size: 15px; color: var(--color-text); }
+    .alert-card .time {
+      font-size: 13px; color: var(--color-muted); margin-top: 4px;
+    }
+    .alert-card button {
+      background: var(--color-primary);
+      color: white;
+      border: 0;
+      border-radius: 8px;
+      padding: 8px 16px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .alert-card button:hover { opacity: 0.9; }
+    .alert-empty {
+      background: var(--color-card);
+      border-radius: 12px;
+      padding: 32px;
+      box-shadow: var(--shadow-card);
+      text-align: center;
+      color: var(--color-muted);
+      font-size: 15px;
+    }
+
+    /* ─── 푸터 ───────────────────────────────── */
+    .guardian-footer {
+      margin-top: 40px;
+      padding: 20px 24px;
+      background: var(--color-card);
+      border-radius: 12px;
+      box-shadow: var(--shadow-card);
+      font-size: 14px;
+      color: var(--color-muted);
+    }
+    .guardian-footer strong { color: var(--color-text); }
+  </style>
+</head>
+<body>
+
+  <!-- 1) 헤더 상태 배너 -->
+  <div id="statusBanner" class="status-banner">
+    <h1 id="statusText">어머니 상태를 불러오는 중...</h1>
+    <div class="status-sub" id="statusSub">잠시만 기다려주세요.</div>
+  </div>
+
+  <div class="container">
+    <!-- 2) 실시간 데이터 카드 -->
+    <div class="section-title">실시간 상태</div>
+    <div class="card-grid">
+      <div class="data-card" id="card-temp">
+        <div class="label">🌡️ 어머니 댁 온도</div>
+        <div class="value"><span id="val-temp">--</span><span class="unit">°C</span></div>
+      </div>
+      <div class="data-card" id="card-humid">
+        <div class="label">💧 어머니 댁 습도</div>
+        <div class="value"><span id="val-humid">--</span><span class="unit">%</span></div>
+      </div>
+      <div class="data-card" id="card-hr">
+        <div class="label">❤️ 어머니 안정 시 심박수</div>
+        <div class="value"><span id="val-hr">--</span><span class="unit">bpm</span></div>
+      </div>
+      <div class="data-card" id="card-activity">
+        <div class="label">👣 어머니의 오늘 걸음수</div>
+        <div class="value"><span id="val-steps">--</span><span class="unit">보</span></div>
+      </div>
+    </div>
+
+    <!-- 3) 온도 추이 그래프 -->
+    <div class="section-title">실내 온도 추이</div>
+    <div class="chart-card">
+      <div class="chart-container">
+        <canvas id="tempChart"></canvas>
+        <div id="chartPlaceholder">데이터 없음 (센서 발행자를 시작해주세요)</div>
+      </div>
+    </div>
+
+    <!-- 4) 알림 목록 -->
+    <div class="section-title">최근 알림</div>
+    <div id="alertList" class="alert-list">
+      <div class="alert-empty">불러오는 중...</div>
+    </div>
+
+    <!-- 5) 보호자 정보 푸터 -->
+    <div id="guardianFooter" class="guardian-footer">
+      긴급 연락 정보를 불러오는 중...
+    </div>
+  </div>
+
+  <script>
+    // ─── 설정 ────────────────────────────────────
+    const API_BASE = 'https://zxvnyzcqm1.execute-api.ap-northeast-2.amazonaws.com/prod';
+    const REFRESH_INTERVAL_MS = 5000;
+    let chartInstance = null;
+    let lastAlertsKey = '';            // 알림 변경 감지용
+
+    // 카드별 alert_type 매핑
+    const CARD_ALERT_MAP = {
+      temp: ['TEMP_HIGH', 'TEMP_LOW'],
+      humid: ['HUMID_HIGH', 'HUMID_LOW'],
+      hr: ['HR_HIGH', 'HR_LOW'],
+      activity: ['LOW_ACTIVITY'],
+    };
+
+    // ─── 시간 포맷 유틸 ─────────────────────────
+    function formatRelativeTime(isoString) {
+      const now = new Date();
+      const then = new Date(isoString);
+      const diffSec = Math.floor((now - then) / 1000);
+      if (diffSec < 60) return '방금';
+      if (diffSec < 3600) return `${Math.floor(diffSec / 60)}분 전`;
+      if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}시간 전`;
+      return then.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
+    }
+
+    function formatTime(isoString) {
+      return new Date(isoString).toLocaleTimeString('ko-KR', {
+        hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Seoul',
+      });
+    }
+
+    function isCardWarning(alerts, types) {
+      return alerts.some((a) => types.includes(a.alert_type));
+    }
+
+    // 숫자 포맷 (천 단위 콤마, 소수점 옵션)
+    function fmtNumber(v, digits = 0) {
+      if (v === null || v === undefined || Number.isNaN(v)) return '--';
+      return Number(v).toLocaleString('ko-KR', {
+        minimumFractionDigits: digits, maximumFractionDigits: digits,
+      });
+    }
+
+    // ─── 화면 갱신 함수 ─────────────────────────
+
+    function updateStatusBanner(senior) {
+      const banner = document.getElementById('statusBanner');
+      const text = document.getElementById('statusText');
+      const sub = document.getElementById('statusSub');
+      const status = senior?.status || 'normal';
+      const name = senior?.name || '어머니';
+
+      banner.classList.remove('normal', 'warning', 'emergency');
+      banner.classList.add(status);
+
+      const map = {
+        normal:    { icon: '✅', label: '정상', sub: '평온하세요.' },
+        warning:   { icon: '⚠️', label: '주의', sub: '확인이 필요합니다.' },
+        emergency: { icon: '🚨', label: '위험', sub: '즉시 확인하세요.' },
+      };
+      const m = map[status] || map.normal;
+      text.textContent = `${m.icon} 어머니 (${name}) 현재 상태: ${m.label}`;
+      sub.textContent = m.sub;
+    }
+
+    function updateDataCards(summary) {
+      const env = summary?.environment;
+      const fit = summary?.fitbit;
+      const alerts = summary?.unacknowledged_alerts || [];
+
+      document.getElementById('val-temp').textContent =
+        env && env.temperature !== null && env.temperature !== undefined
+          ? fmtNumber(env.temperature, 1) : '--';
+      document.getElementById('val-humid').textContent =
+        env && env.humidity !== null && env.humidity !== undefined
+          ? fmtNumber(env.humidity, 1) : '--';
+      document.getElementById('val-hr').textContent =
+        fit && fit.heart_rate !== null && fit.heart_rate !== undefined
+          ? fmtNumber(fit.heart_rate, 0) : '--';
+      document.getElementById('val-steps').textContent =
+        fit && fit.steps !== null && fit.steps !== undefined
+          ? fmtNumber(fit.steps, 0) : '--';
+
+      // 카드별 테두리 (해당 alert_type 활성 시 .alert 클래스 토글)
+      Object.entries(CARD_ALERT_MAP).forEach(([key, types]) => {
+        const el = document.getElementById(`card-${key}`);
+        if (!el) return;
+        if (isCardWarning(alerts, types)) el.classList.add('alert');
+        else el.classList.remove('alert');
+      });
+    }
+
+    function updateAlertList(alerts) {
+      // 깜빡임 방지: 알림 ID 목록이 동일하면 재렌더 skip
+      const newKey = JSON.stringify(alerts.map((a) => a.id));
+      if (newKey === lastAlertsKey) return;
+      lastAlertsKey = newKey;
+
+      const list = document.getElementById('alertList');
+      list.innerHTML = '';
+
+      if (!alerts || alerts.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'alert-empty';
+        empty.textContent = '✨ 현재 알림이 없습니다. 어머니가 평온하세요.';
+        list.appendChild(empty);
+        return;
+      }
+
+      const iconMap = { INFO: '🔵', WARNING: '🟠', EMERGENCY: '🔴' };
+      alerts.forEach((a) => {
+        const card = document.createElement('div');
+        card.className = `alert-card ${a.level}`;
+
+        const icon = document.createElement('div');
+        icon.className = 'icon';
+        icon.textContent = iconMap[a.level] || '⚪';
+
+        const body = document.createElement('div');
+        body.className = 'body';
+        const msg = document.createElement('div');
+        msg.className = 'message';
+        msg.textContent = a.message || a.alert_type;
+        const time = document.createElement('div');
+        time.className = 'time';
+        time.textContent = formatRelativeTime(a.timestamp);
+        body.appendChild(msg);
+        body.appendChild(time);
+
+        const btn = document.createElement('button');
+        btn.textContent = '확인';
+        btn.onclick = () => acknowledgeAlert(a.id);
+
+        card.appendChild(icon);
+        card.appendChild(body);
+        card.appendChild(btn);
+        list.appendChild(card);
+      });
+    }
+
+    function updateGuardianInfo(guardian) {
+      const el = document.getElementById('guardianFooter');
+      const name = guardian?.name || '-';
+      const phone = guardian?.phone || '-';
+      el.innerHTML = `긴급 연락: <strong>${name}</strong> · ${phone}`;
+    }
+
+    function updateChart(history) {
+      const canvas = document.getElementById('tempChart');
+      const placeholder = document.getElementById('chartPlaceholder');
+
+      if (!history || history.length === 0) {
+        canvas.style.display = 'none';
+        placeholder.style.display = 'block';
+        return;
+      }
+      canvas.style.display = 'block';
+      placeholder.style.display = 'none';
+
+      const labels = history.map((d) => formatTime(d.timestamp));
+      const temps = history.map((d) => d.temperature);
+
+      if (!chartInstance) {
+        const ctx = canvas.getContext('2d');
+        chartInstance = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels,
+            datasets: [{
+              label: '온도 (°C)',
+              data: temps,
+              borderColor: '#2196F3',
+              backgroundColor: 'rgba(33, 150, 243, 0.1)',
+              borderWidth: 2,
+              tension: 0.3,
+              fill: true,
+              pointRadius: 3,
+            }],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              y: { beginAtZero: false, title: { display: true, text: '온도 (°C)' } },
+              x: { title: { display: true, text: '시간' } },
+            },
+          },
+        });
+      } else {
+        chartInstance.data.labels = labels;
+        chartInstance.data.datasets[0].data = temps;
+        chartInstance.update('none');
+      }
+    }
+
+    // ─── 메인 갱신 ──────────────────────────────
+    async function refreshDashboard() {
+      const results = await Promise.allSettled([
+        fetch(`${API_BASE}/api/dashboard/summary`).then((r) => r.json()),
+        fetch(`${API_BASE}/api/environment/history?limit=30`).then((r) => r.json()),
+      ]);
+
+      if (results[0].status === 'fulfilled') {
+        const summary = results[0].value;
+        updateStatusBanner(summary.senior);
+        updateDataCards(summary);
+        updateAlertList(summary.unacknowledged_alerts || []);
+        updateGuardianInfo(summary.guardian);
+      } else {
+        console.error('summary fetch 실패:', results[0].reason);
+      }
+
+      if (results[1].status === 'fulfilled') {
+        updateChart(results[1].value || []);
+      } else {
+        console.error('history fetch 실패:', results[1].reason);
+      }
+    }
+
+    // ─── 알림 확인 ──────────────────────────────
+    async function acknowledgeAlert(alertId) {
+      try {
+        const res = await fetch(`${API_BASE}/api/alerts/${alertId}/acknowledge`, {
+          method: 'POST',
+        });
+        if (res.ok) {
+          lastAlertsKey = '';   // 강제 재렌더
+          refreshDashboard();
+        } else {
+          alert('확인 처리 실패');
+        }
+      } catch (err) {
+        alert('확인 처리 실패: ' + err.message);
+      }
+    }
+
+    // ─── 초기화 + 자동 갱신 ─────────────────────
+    setInterval(refreshDashboard, REFRESH_INTERVAL_MS);
+    window.addEventListener('DOMContentLoaded', refreshDashboard);
+  </script>
+</body>
+</html>
