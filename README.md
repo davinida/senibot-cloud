@@ -54,8 +54,8 @@ AWS 관리형 서비스 기반의 서버리스 구조입니다. 데이터는 두
 - [x] 환경 데이터 수집 파이프라인 (IoT Core → Lambda → RDS)
 - [x] 생체 데이터 수집 (Google Health API 실연동 → Lambda → RDS)
 - [x] 임계값 기반 보호자 알림 (SNS 이메일)
-- [ ] 조회 REST API (API Gateway + Lambda)
-- [ ] 보호자 대시보드
+- [x] 조회 REST API (API Gateway + Lambda)
+- [x] 보호자 대시보드 (Cognito 로그인 포함)
 
 ## 디렉터리 구조
 
