@@ -108,8 +108,8 @@ async function collectType(accessToken, dataType) {
   try {
     const resp = await fetchDataPoints(accessToken, dataType);
     logSnippet(dataType, resp);
-    const latest = pickLatest(resp && resp.dataPoints);
-    return { value: extractNumber(latest), timestamp: extractTimestamp(latest) };
+    const latest = pickLatest(resp && resp.dataPoints, dataType);
+    return { value: extractNumber(latest, dataType), timestamp: extractTimestamp(latest, dataType) };
   } catch (err) {
     console.error(`[2/3 Health API 실패: ${dataType}]`, err.message);
     return { value: null, timestamp: null };
@@ -147,56 +147,61 @@ function logSnippet(label, resp) {
   console.log(`[${label}] dataPoints=${count}, first=${first}`);
 }
 
-// 타임스탬프 후보 필드 (필드명이 불확실하여 여러 후보 탐색)
-function tsField(dp) {
+// 데이터 타입별 타임스탬프 경로 (실제 Google Health API 응답 구조 기준)
+function tsField(dp, dataType) {
   if (!dp) return '';
-  return dp.physical_time || dp.physicalTime || dp.endTime || dp.end_time ||
-         dp.startTime || dp.start_time || dp.modifiedTime || '';
+  switch (dataType) {
+    case 'heart-rate':
+      return dp.heartRate?.sampleTime?.physicalTime || '';
+    case 'steps':
+      // endTime 우선, 없으면 startTime
+      return dp.steps?.interval?.endTime || dp.steps?.interval?.startTime || '';
+    case 'oxygen-saturation':
+      return dp.oxygenSaturation?.sampleTime?.physicalTime || '';
+    default:
+      return '';
+  }
 }
 
 // dataPoints 배열에서 가장 최근 항목 선택. ISO 문자열이면 사전식 정렬이 시간순과 일치.
-function pickLatest(dataPoints) {
+function pickLatest(dataPoints, dataType) {
   if (!Array.isArray(dataPoints) || dataPoints.length === 0) return null;
   return [...dataPoints]
-    .sort((a, b) => String(tsField(a)).localeCompare(String(tsField(b))))
+    .sort((a, b) => String(tsField(a, dataType)).localeCompare(String(tsField(b, dataType))))
     .pop();
 }
 
-// 유효한 날짜 문자열일 때만 timestamp로 사용 (epoch nanos 등은 무시 -> 상위에서 now 대체)
-function extractTimestamp(dp) {
-  const ts = tsField(dp);
+// 유효한 날짜 문자열일 때만 timestamp로 사용 (그 외엔 null -> 상위에서 now 대체)
+function extractTimestamp(dp, dataType) {
+  const ts = tsField(dp, dataType);
   return (typeof ts === 'string' && ts && !Number.isNaN(Date.parse(ts))) ? ts : null;
 }
 
-// dataPoint에서 숫자값을 방어적으로 추출 (값 필드 구조가 불확실하여 여러 후보 탐색)
-function extractNumber(dp) {
+// 데이터 타입별 값 경로 (실제 응답 구조 기준).
+// 값이 문자열일 수 있으므로 Number()로 변환하고, 변환 실패(NaN)면 null.
+function extractNumber(dp, dataType) {
   if (!dp) return null;
 
-  // 1) 평면 숫자 필드 후보
-  const direct = firstNum([dp.value, dp.fpVal, dp.intVal, dp.floatValue, dp.intValue]);
-  if (direct !== null) return direct;
-
-  // 2) value가 배열인 경우 (예: value: [ { fpVal: 72 } ])
-  if (Array.isArray(dp.value) && dp.value.length > 0) {
-    const v = dp.value[0];
-    const n = firstNum([v && v.fpVal, v && v.intVal, v && v.value, v && v.floatValue, v && v.intValue]);
-    if (n !== null) return n;
+  let raw;
+  switch (dataType) {
+    case 'heart-rate':
+      raw = dp.heartRate?.beatsPerMinute;          // 예: "70" (문자열)
+      break;
+    case 'steps':
+      // 걸음수는 "최신 1개 구간의 count"를 그대로 사용한다.
+      // (오늘 누적 / 여러 구간 합산이 더 의미 있으나, 지금은 단순화. 나중에 다듬음.)
+      raw = dp.steps?.count;                        // 예: "4" (문자열)
+      break;
+    case 'oxygen-saturation':
+      raw = dp.oxygenSaturation?.percentage;        // 예: 50 (숫자)
+      break;
+    default:
+      return null;
   }
 
-  // 3) value가 객체인 경우 (예: value: { fpVal: 72 })
-  if (dp.value && typeof dp.value === 'object' && !Array.isArray(dp.value)) {
-    const n = firstNum([dp.value.fpVal, dp.value.intVal, dp.value.value]);
-    if (n !== null) return n;
-  }
-
-  return null;
-}
-
-function firstNum(candidates) {
-  for (const c of candidates) {
-    if (typeof c === 'number' && Number.isFinite(c)) return c;
-  }
-  return null;
+  if (raw === undefined || raw === null || raw === '') return null;
+  const n = Number(raw);                            // 문자열/숫자 모두 변환
+  return Number.isFinite(n) ? n : null;             // NaN이면 null
 }
 
 function isNum(n) {
