@@ -35,7 +35,8 @@ const TH = {
   SEED_STEPS: num(process.env.FITBIT_SEED_STEPS, 1500),
 };
 
-const SNS_SUBJECT = '[시니봇] 보호자 알림';
+// SNS Subject는 ASCII만 허용되므로 영문으로 둔다. (본문 Message는 UTF-8 한글 유지)
+const SNS_SUBJECT = '[SeniBot] Guardian Alert';
 
 // ─── 디바운싱 (DB 기반) ───────────────────────────────────────────
 // 같은 senior_id + alert_type의 최근 알림이 DEBOUNCE_SEC 이내에 있으면 true(=skip).
