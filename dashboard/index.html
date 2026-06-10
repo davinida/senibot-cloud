@@ -5,6 +5,7 @@
   <title>시니봇 — 보호자 대시보드</title>
   <meta name="viewport" content="width=1280, initial-scale=1" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/amazon-cognito-identity-js@6/dist/amazon-cognito-identity.min.js"></script>
   <style>
     /* ─── 기본 스타일 ─────────────────────────── */
     :root {
@@ -174,57 +175,167 @@
       color: var(--color-muted);
     }
     .guardian-footer strong { color: var(--color-text); }
+
+    /* ─── 로그인 화면 ────────────────────────── */
+    .login-screen {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .login-card {
+      background: var(--color-card);
+      border-radius: 16px;
+      box-shadow: var(--shadow-card);
+      padding: 40px 32px;
+      width: 100%;
+      max-width: 380px;
+    }
+    .login-card h2 {
+      margin: 0 0 24px;
+      font-size: 22px;
+      text-align: center;
+      color: var(--color-text);
+    }
+    .login-card input {
+      width: 100%;
+      padding: 12px 14px;
+      margin-bottom: 12px;
+      border: 1px solid #D1D5DB;
+      border-radius: 8px;
+      font-size: 15px;
+    }
+    .login-card input:focus {
+      outline: none;
+      border-color: var(--color-primary);
+    }
+    .login-card button {
+      width: 100%;
+      padding: 12px;
+      border: 0;
+      border-radius: 8px;
+      background: var(--color-primary);
+      color: white;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 4px;
+    }
+    .login-card button:hover { opacity: 0.9; }
+    .login-card button:disabled { opacity: 0.5; cursor: default; }
+    .login-error {
+      background: #FEE2E2;
+      color: var(--color-emergency);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 14px;
+      margin-bottom: 16px;
+      text-align: center;
+    }
+    .np-note {
+      font-size: 14px;
+      color: var(--color-muted);
+      margin: 0 0 12px;
+      line-height: 1.5;
+    }
+
+    /* ─── 로그아웃 버튼 ──────────────────────── */
+    .logout-btn {
+      position: fixed;
+      top: 20px;
+      right: 24px;
+      z-index: 1000;
+      background: rgba(255, 255, 255, 0.2);
+      color: white;
+      border: 1px solid rgba(255, 255, 255, 0.5);
+      border-radius: 8px;
+      padding: 8px 16px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .logout-btn:hover { background: rgba(255, 255, 255, 0.3); }
   </style>
 </head>
 <body>
 
-  <!-- 1) 헤더 상태 배너 -->
-  <div id="statusBanner" class="status-banner">
-    <h1 id="statusText">어머니 상태를 불러오는 중...</h1>
-    <div class="status-sub" id="statusSub">잠시만 기다려주세요.</div>
+  <!-- 로그인 화면 (미인증 시 표시) -->
+  <div id="loginScreen" class="login-screen">
+    <div class="login-card">
+      <h2>시니봇 보호자 로그인</h2>
+      <div id="loginError" class="login-error" style="display: none;"></div>
+
+      <!-- 일반 로그인 -->
+      <div id="loginForm">
+        <input id="email" type="email" placeholder="이메일" autocomplete="username" />
+        <input id="password" type="password" placeholder="비밀번호" autocomplete="current-password" />
+        <button id="loginBtn" onclick="handleLogin()">로그인</button>
+      </div>
+
+      <!-- 새 비밀번호 설정 (임시 비밀번호 상태일 때) -->
+      <div id="newPasswordForm" style="display: none;">
+        <p class="np-note">임시 비밀번호 상태입니다. 새 비밀번호를 설정해 주세요.</p>
+        <input id="newPassword" type="password" placeholder="새 비밀번호" autocomplete="new-password" />
+        <button id="newPasswordBtn" onclick="handleNewPassword()">새 비밀번호 설정</button>
+      </div>
+    </div>
   </div>
 
-  <div class="container">
-    <!-- 2) 실시간 데이터 카드 -->
-    <div class="section-title">실시간 상태</div>
-    <div class="card-grid">
-      <div class="data-card" id="card-temp">
-        <div class="label">🌡️ 어머니 댁 온도</div>
-        <div class="value"><span id="val-temp">--</span><span class="unit">°C</span></div>
+  <!-- 대시보드 본문 (로그인 후 표시) -->
+  <div id="appRoot" style="display: none;">
+
+    <button class="logout-btn" onclick="handleLogout()">로그아웃</button>
+
+    <!-- 1) 헤더 상태 배너 -->
+    <div id="statusBanner" class="status-banner">
+      <h1 id="statusText">어머니 상태를 불러오는 중...</h1>
+      <div class="status-sub" id="statusSub">잠시만 기다려주세요.</div>
+    </div>
+
+    <div class="container">
+      <!-- 2) 실시간 데이터 카드 -->
+      <div class="section-title">실시간 상태</div>
+      <div class="card-grid">
+        <div class="data-card" id="card-temp">
+          <div class="label">🌡️ 어머니 댁 온도</div>
+          <div class="value"><span id="val-temp">--</span><span class="unit">°C</span></div>
+        </div>
+        <div class="data-card" id="card-humid">
+          <div class="label">💧 어머니 댁 습도</div>
+          <div class="value"><span id="val-humid">--</span><span class="unit">%</span></div>
+        </div>
+        <div class="data-card" id="card-hr">
+          <div class="label">❤️ 어머니 안정 시 심박수</div>
+          <div class="value"><span id="val-hr">--</span><span class="unit">bpm</span></div>
+        </div>
+        <div class="data-card" id="card-activity">
+          <div class="label">👣 어머니의 오늘 걸음수</div>
+          <div class="value"><span id="val-steps">--</span><span class="unit">보</span></div>
+        </div>
       </div>
-      <div class="data-card" id="card-humid">
-        <div class="label">💧 어머니 댁 습도</div>
-        <div class="value"><span id="val-humid">--</span><span class="unit">%</span></div>
+
+      <!-- 3) 온도 추이 그래프 -->
+      <div class="section-title">실내 온도 추이</div>
+      <div class="chart-card">
+        <div class="chart-container">
+          <canvas id="tempChart"></canvas>
+          <div id="chartPlaceholder">데이터 없음 (센서 발행자를 시작해주세요)</div>
+        </div>
       </div>
-      <div class="data-card" id="card-hr">
-        <div class="label">❤️ 어머니 안정 시 심박수</div>
-        <div class="value"><span id="val-hr">--</span><span class="unit">bpm</span></div>
+
+      <!-- 4) 알림 목록 -->
+      <div class="section-title">최근 알림</div>
+      <div id="alertList" class="alert-list">
+        <div class="alert-empty">불러오는 중...</div>
       </div>
-      <div class="data-card" id="card-activity">
-        <div class="label">👣 어머니의 오늘 걸음수</div>
-        <div class="value"><span id="val-steps">--</span><span class="unit">보</span></div>
+
+      <!-- 5) 보호자 정보 푸터 -->
+      <div id="guardianFooter" class="guardian-footer">
+        긴급 연락 정보를 불러오는 중...
       </div>
     </div>
 
-    <!-- 3) 온도 추이 그래프 -->
-    <div class="section-title">실내 온도 추이</div>
-    <div class="chart-card">
-      <div class="chart-container">
-        <canvas id="tempChart"></canvas>
-        <div id="chartPlaceholder">데이터 없음 (센서 발행자를 시작해주세요)</div>
-      </div>
-    </div>
-
-    <!-- 4) 알림 목록 -->
-    <div class="section-title">최근 알림</div>
-    <div id="alertList" class="alert-list">
-      <div class="alert-empty">불러오는 중...</div>
-    </div>
-
-    <!-- 5) 보호자 정보 푸터 -->
-    <div id="guardianFooter" class="guardian-footer">
-      긴급 연락 정보를 불러오는 중...
-    </div>
   </div>
 
   <script>
@@ -241,6 +352,136 @@
       hr: ['HR_HIGH', 'HR_LOW'],
       activity: ['LOW_ACTIVITY'],
     };
+
+    // ─── Cognito 인증 ───────────────────────────
+    const COGNITO = {
+      UserPoolId: 'ap-northeast-2_eXju82ZUK',
+      ClientId: '2plr4phk36nme0pgf3te0kb90a',
+    };
+    // 토큰은 sessionStorage에 저장: 새로고침엔 세션 유지, 탭을 닫으면 자동 로그아웃
+    const userPool = new AmazonCognitoIdentity.CognitoUserPool({
+      UserPoolId: COGNITO.UserPoolId,
+      ClientId: COGNITO.ClientId,
+      Storage: window.sessionStorage,
+    });
+
+    let refreshTimer = null;          // 자동 갱신 인터벌 핸들
+    let pendingCognitoUser = null;    // NEW_PASSWORD_REQUIRED 챌린지 처리용
+
+    function showDashboard() {
+      document.getElementById('loginScreen').style.display = 'none';
+      document.getElementById('appRoot').style.display = 'block';
+      refreshDashboard();
+      if (!refreshTimer) refreshTimer = setInterval(refreshDashboard, REFRESH_INTERVAL_MS);
+    }
+
+    function showLogin() {
+      document.getElementById('appRoot').style.display = 'none';
+      document.getElementById('loginScreen').style.display = 'flex';
+      if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+    }
+
+    function setLoginError(msg) {
+      const el = document.getElementById('loginError');
+      if (!msg) { el.style.display = 'none'; el.textContent = ''; return; }
+      el.textContent = msg;
+      el.style.display = 'block';
+    }
+
+    // 페이지 로드 시 세션 확인 (유효하면 대시보드, 아니면 로그인 화면)
+    function checkAuth() {
+      const cognitoUser = userPool.getCurrentUser();
+      if (!cognitoUser) { showLogin(); return; }
+      cognitoUser.getSession((err, session) => {
+        if (err || !session || !session.isValid()) showLogin();
+        else showDashboard();
+      });
+    }
+
+    // 로그인 (기본 USER_SRP_AUTH 흐름)
+    function handleLogin() {
+      setLoginError('');
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      if (!email || !password) {
+        setLoginError('이메일과 비밀번호를 입력하세요.');
+        return;
+      }
+      const btn = document.getElementById('loginBtn');
+      btn.disabled = true;
+
+      const authDetails = new AmazonCognitoIdentity.AuthenticationDetails({
+        Username: email,
+        Password: password,
+      });
+      const cognitoUser = new AmazonCognitoIdentity.CognitoUser({
+        Username: email,
+        Pool: userPool,
+      });
+      // 기본은 SRP(USER_SRP_AUTH). USER_PASSWORD_AUTH가 필요하면 아래 주석을 해제:
+      // cognitoUser.setAuthenticationFlowType('USER_PASSWORD_AUTH');
+
+      cognitoUser.authenticateUser(authDetails, {
+        onSuccess: () => {
+          btn.disabled = false;
+          document.getElementById('password').value = '';
+          showDashboard();
+        },
+        onFailure: (err) => {
+          btn.disabled = false;
+          // 비밀번호는 로그에 남기지 않는다. code/message만.
+          console.error('로그인 실패:', err && err.code, err && err.message);
+          setLoginError('이메일 또는 비밀번호가 올바르지 않습니다.');
+        },
+        newPasswordRequired: () => {
+          // 임시 비밀번호 상태: 새 비밀번호 입력 폼으로 전환
+          btn.disabled = false;
+          pendingCognitoUser = cognitoUser;
+          document.getElementById('loginForm').style.display = 'none';
+          document.getElementById('newPasswordForm').style.display = 'block';
+          setLoginError('');
+        },
+      });
+    }
+
+    // 새 비밀번호 설정 (NEW_PASSWORD_REQUIRED 챌린지 완료)
+    function handleNewPassword() {
+      setLoginError('');
+      const newPassword = document.getElementById('newPassword').value;
+      if (!newPassword) { setLoginError('새 비밀번호를 입력하세요.'); return; }
+      if (!pendingCognitoUser) {
+        setLoginError('세션이 만료되었습니다. 처음부터 다시 시도하세요.');
+        return;
+      }
+      const btn = document.getElementById('newPasswordBtn');
+      btn.disabled = true;
+      // 추가 필수 속성 없이 새 비밀번호만 설정 (간단 처리)
+      pendingCognitoUser.completeNewPasswordChallenge(newPassword, {}, {
+        onSuccess: () => {
+          btn.disabled = false;
+          pendingCognitoUser = null;
+          document.getElementById('newPassword').value = '';
+          document.getElementById('newPasswordForm').style.display = 'none';
+          document.getElementById('loginForm').style.display = 'block';
+          showDashboard();
+        },
+        onFailure: (err) => {
+          btn.disabled = false;
+          console.error('새 비밀번호 설정 실패:', err && err.code, err && err.message);
+          setLoginError('새 비밀번호 설정에 실패했습니다.');
+        },
+      });
+    }
+
+    // 로그아웃 (세션 정리 후 로그인 화면)
+    function handleLogout() {
+      const cognitoUser = userPool.getCurrentUser();
+      if (cognitoUser) cognitoUser.signOut();
+      document.getElementById('email').value = '';
+      document.getElementById('password').value = '';
+      setLoginError('');
+      showLogin();
+    }
 
     // ─── 시간 포맷 유틸 ─────────────────────────
     function formatRelativeTime(isoString) {
@@ -465,9 +706,18 @@
       }
     }
 
-    // ─── 초기화 + 자동 갱신 ─────────────────────
-    setInterval(refreshDashboard, REFRESH_INTERVAL_MS);
-    window.addEventListener('DOMContentLoaded', refreshDashboard);
+    // ─── 초기화 ─────────────────────────────────
+    function init() {
+      // Enter 키로 제출
+      document.getElementById('password').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') handleLogin();
+      });
+      document.getElementById('newPassword').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') handleNewPassword();
+      });
+      checkAuth(); // 세션 있으면 대시보드, 없으면 로그인 화면
+    }
+    window.addEventListener('DOMContentLoaded', init);
   </script>
 </body>
 </html>
