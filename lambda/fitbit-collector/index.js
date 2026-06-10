@@ -61,6 +61,13 @@ exports.handler = async (event) => {
     const saved = await saveToRds(deviceId, {
       timestamp: measuredAt, heartRate, steps, spo2,
     });
+    if (saved.skipped) {
+      console.log(
+        `중복 측정값으로 저장 건너뜀(reason=${saved.reason}): ` +
+        `senior_id=${saved.seniorId}, timestamp=${measuredAt}`
+      );
+      return { ok: true, skipped: true, reason: saved.reason };
+    }
     console.log(
       `저장 완료: fitbit_data.id=${saved.id}, senior_id=${saved.seniorId}, ` +
       `heart_rate=${heartRate}, steps=${steps}, spo2=${spo2}, timestamp=${measuredAt}`
@@ -237,6 +244,22 @@ async function saveToRds(deviceId, row) {
       throw new Error(`등록되지 않은 device_id: ${deviceId} (seniors 테이블에 없음)`);
     }
     const seniorId = senior.rows[0].senior_id;
+
+    // 중복 저장 방지 가드:
+    // 같은 senior의 마지막 저장 timestamp가 이번 측정과 '정확히 같은 시각'이면 INSERT를 건너뛴다.
+    // 비교는 PostgreSQL의 timestamptz 동등 비교로 수행한다(정밀도/시간대 정합성 보장).
+    // 기존 데이터가 없으면(첫 저장) same 행이 없으므로 그대로 INSERT 진행.
+    const last = await client.query(
+      `SELECT (timestamp = $2::timestamptz) AS same
+       FROM fitbit_data
+       WHERE senior_id = $1
+       ORDER BY timestamp DESC
+       LIMIT 1`,
+      [seniorId, row.timestamp]
+    );
+    if (last.rowCount > 0 && last.rows[0].same === true) {
+      return { skipped: true, reason: 'duplicate', seniorId };
+    }
 
     const inserted = await client.query(
       `INSERT INTO fitbit_data (senior_id, timestamp, heart_rate, steps, sleep_score, spo2)
