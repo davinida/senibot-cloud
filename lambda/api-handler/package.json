@@ -1,0 +1,12 @@
+{
+  "name": "senibot-api-handler",
+  "version": "1.0.0",
+  "description": "SeniBot 조회 REST API Lambda (API Gateway 프록시 -> RDS PostgreSQL)",
+  "main": "index.js",
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "pg": "^8.13.0"
+  }
+}
