@@ -135,6 +135,22 @@ senibot-cloud/
 
 정적 웹 페이지(`dashboard/index.html`)로, Amazon Cognito 로그인을 통과해야 화면에 접근할 수 있습니다. 로그인 후 어르신 상태 배너, 실시간 데이터 카드(온도·습도·심박수·걸음수), 온도 추이 그래프, 미확인 알림 목록과 확인 버튼을 제공하며 5초 간격으로 자동 갱신됩니다.
 
+## 화면
+
+실제 구현된 시스템의 동작 화면입니다.
+
+### 보호자 로그인 (Amazon Cognito)
+
+![보호자 로그인](docs/screenshots/login.png)
+
+### 보호자 대시보드
+
+![보호자 대시보드](docs/screenshots/dashboard.png)
+
+### 알림 이메일 (Amazon SNS)
+
+![알림 이메일](docs/screenshots/alarm-mail.png)
+
 ## 빌드 / 배포
 
 1. **데이터베이스** — `database/.env.example`를 복사해 `.env`를 만들고 RDS 접속 정보를 채운 뒤, `schema.sql`로 테이블·인덱스를 생성하고 `seed.sql`로 초기 데이터를 적재합니다.
